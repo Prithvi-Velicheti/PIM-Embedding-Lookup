@@ -29,10 +29,11 @@ struct callback_input{
     int32_t*** tmp_results;
 }; 
 
+//Metadata structure
+struct metadata {
 
-struct metadata
-{
-uint32_t indices_len;
-uint32_t offsets_len;
-uint32_t embedding_data_len;
+	uint32_t indices_len ;
+	uint32_t offsets_len ;
+	uint32_t embedding_data_len ;
 }
+
