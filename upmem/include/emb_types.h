@@ -35,3 +35,31 @@ struct metadata {
 	uint32_t embedding_data_len ; 
 }; 
 
+typedef struct get_block_t {
+    /** The get_block function */
+    get_block_func_t f;
+    /** User arguments for the get_block function */
+    void *args;
+} get_block_t;
+
+struct sg_block_info {
+    /** Starting address of the block */
+    uint8_t *addr;
+    /** Number of bytes to transfer for this block */
+    uint32_t length;
+};
+
+typedef bool (*get_block_func_t)(struct sg_block_info *out, uint32_t dpu_index, uint32_t block_index, void *args);
+
+
+
+
+
+
+
+
+
+
+
+
+

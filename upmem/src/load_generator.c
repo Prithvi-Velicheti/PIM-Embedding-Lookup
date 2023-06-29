@@ -31,7 +31,8 @@ void synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_tables){
 		int32_t* table_data=(int32_t*)malloc(nr_rows*nr_cols*sizeof(int32_t));
 		for (int i=0; i<nr_rows*nr_cols; i++)
 			table_data[i]=(int)rand();
-		dpu_set=populate_mram(k, nr_rows, 0, table_data, NULL);
+		//dpu_set=populate_mram(k, nr_rows, 0, table_data, NULL);
+		dpu_set=populate_mram_scatter_gather(k, nr_rows, 0, table_data, NULL);
 		emb_tables[k]=table_data;
 		//free(table_data);
 	}
@@ -97,7 +98,8 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 	int sum=0;
 	for(int i=0; i<100; i++){
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-		lookup(synthetic_indices, synthetic_offsets, final_results,(void*)dpu_set);
+		//lookup(synthetic_indices, synthetic_offsets, final_results,(void*)dpu_set);
+		lookup_scatter_gather(synthetic_indices, synthetic_offsets, final_results,(void*)dpu_set);
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
 		sum+=time_diff(start, end).tv_nsec;
 	}
