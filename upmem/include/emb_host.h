@@ -20,7 +20,7 @@
 #define RT_CONFIG 0
 
 #ifndef DPU_BINARY
-#    define DPU_BINARY "//home/prithvi/prithvi/phd/eth/safari/research/ubc/scatter_gather/PIM-Embedding-Lookup//PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
+#    define DPU_BINARY "/home/prithvi/prithvi/phd/eth/safari/research/ubc/scatter_gather/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 
@@ -238,7 +238,10 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     // // Check env
     // printf("C test: Check envs: NR_COLS=%d, NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
     //int latency_record = latency_print;
-    int latency_record = 0 ;
+    int latency_record = 0;
+ 
+ 
+ 
     long ind_copy_lat, query_copy_lat, dpu_launch_lat, results_copy_lat, callback_prep_lat, wait_sync_lat;
 
 

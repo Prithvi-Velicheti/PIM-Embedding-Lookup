@@ -6,8 +6,8 @@ build=false
 run=false
 debug=false
 verbose=false
-export SDK_PATH=/home/upmem0016/jwong5/upmem-2021.3.0-Linux-x86_64/include/dpu
-export DPU_IMPL_PATH=/home/upmem0016/jwong5/PIM-Embedding-Lookup/upmem
+export SDK_PATH=/home/prithvi/prithvi/phd/eth/safari/research/upmem/sdk/upmem-2023.1.0-Linux-x86_64/include/dpu/
+export DPU_IMPL_PATH=/home/prithvi/prithvi/phd/eth/safari/research/ubc/PIM-Embedding-Lookup/upmem/
 
 
 usage() {
