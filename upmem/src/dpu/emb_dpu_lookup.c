@@ -9,13 +9,38 @@
 #include "common/include/common.h"
 #include "emb_types.h"
 
-// #define TMP_MAX_NR_BATCHES 64
+//#define TMP_MAX_NR_BATCHES 64
 // #define TMP_MAX_INDICES_PER_BATCH 120
+
+//DPU_buffer:  
+//Contents : metadata (indices_len,nr_batches) --> 8 bytes
+//	   : indices_len : max_indices_per_batch*nr_batches
+//	   : offsets_len : nr_batches
+//	   : results_len : nr_batches 
+
+
+/*
+//Data alignment with 64
+#define DPU_BASE_BUFFER_SIZE   MAX_INDICES_PER_BATCH*MAX_NR_BATCHES + 2*MAX_NR_BATCHES + 8
+
+#if (DPU_BASE_BUFFER_SIZE % 64 == 0 )
+#define DPU_BUFFER_SIZE DPU_BASE_BUFFER_SIZE
+#else
+#define DPU_BUFFER_SIZE DPU_BASE_BUFFER_SIZE + 64 - (DPU_BASE_BUFFER_SIZE % 64)
+#endif 
+*/
+
 
 // Profiling
 __host uint32_t instructions;
 
 __mram_noinit struct query_len input_lengths;
+
+
+//__mram_noinit int32_t dpu_buffer[DPU_BUFFER_SIZE];  
+
+
+
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES];

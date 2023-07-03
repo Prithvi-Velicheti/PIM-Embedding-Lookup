@@ -23,34 +23,23 @@ struct query_len {
     uint32_t nr_batches;
 }__attribute__((packed));
 
+
+
 struct callback_input{
     float** final_results;
     uint32_t nr_batches;
     int32_t*** tmp_results;
 }; 
 
+//offsets_len = nr_batches. 
+//results_len = nr_batches 
+
+/*
 struct metadata {
 	uint32_t indices_len ; 
-	uint32_t offsets_len ; 
-	uint32_t embedding_data_len ; 
+        uint32_t nr_batches; 	
 }; 
-
-typedef struct get_block_t {
-    /** The get_block function */
-    get_block_func_t f;
-    /** User arguments for the get_block function */
-    void *args;
-} get_block_t;
-
-struct sg_block_info {
-    /** Starting address of the block */
-    uint8_t *addr;
-    /** Number of bytes to transfer for this block */
-    uint32_t length;
-};
-
-typedef bool (*get_block_func_t)(struct sg_block_info *out, uint32_t dpu_index, uint32_t block_index, void *args);
-
+*/
 
 
 

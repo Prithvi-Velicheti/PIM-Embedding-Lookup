@@ -4,7 +4,6 @@
 #include "common.h"
 #include "host/include/host.h"
 #include "emb_types.h"
-
 #include <assert.h>
 #include <dpu.h>
 #include <dpu_log.h>
@@ -183,21 +182,27 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 }
 
 struct dpu_set_t* populate_mram_scatter_gather(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t *table_data, dpu_runtime_totals *runtime){
-
     
     struct timespec start, end;
     struct dpu_set_t dpu;
 
     if(first_run){
         dpu_set=(struct dpu_set_t*)malloc(sizeof(struct dpu_set_t));
-        DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
-        DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
+        //DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
+	//no.of DPUs to use = NR_COLS*NR_TABLES 
+        //DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
+        DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES,"sgXferEnable=true", dpu_set));
+
+
+	DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
         first_run=false;
     }
 
     uint32_t len;
     uint8_t dpu_id,rank_id;
-    
+   
+
+   /* 
     DPU_FOREACH(*dpu_set, dpu, dpu_id){
         // if(dpu_id<(table_id+1)*NR_COLS && dpu_id>=table_id*NR_COLS){
         if(dpu_id == table_id * NR_COLS + col){
@@ -205,8 +210,26 @@ struct dpu_set_t* populate_mram_scatter_gather(uint32_t table_id, uint64_t nr_ro
             // DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[((dpu_id-table_id*NR_COLS)*nr_rows)])));
             DPU_ASSERT(dpu_prepare_xfer(dpu, table_data));
         }
-    }
-    DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
+    }*/
+
+    //Write a utility function that returns for each DPU 
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  //  DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
 
 
     // for (int i = 0; i < NR_COLS; i++)
