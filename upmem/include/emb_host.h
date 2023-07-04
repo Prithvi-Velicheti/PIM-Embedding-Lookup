@@ -4,6 +4,7 @@
 #include "common.h"
 #include "host/include/host.h"
 #include "emb_types.h"
+
 #include <assert.h>
 #include <dpu.h>
 #include <dpu_log.h>
@@ -181,26 +182,26 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
     return dpu_set;
 }
 
-struct dpu_set_t* populate_mram_scatter_gather(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t *table_data, dpu_runtime_totals *runtime){
-    
+
+struct dpu_set_t* populate_mram_sg(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t *table_data, dpu_runtime_totals *runtime){
+ 
     struct timespec start, end;
     struct dpu_set_t dpu;
-
+  
     if(first_run){
         dpu_set=(struct dpu_set_t*)malloc(sizeof(struct dpu_set_t));
-        //DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
-	//no.of DPUs to use = NR_COLS*NR_TABLES 
-        //DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
         DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES,"sgXferEnable=true", dpu_set));
-
-
-	DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
+        DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
         first_run=false;
     }
 
     uint32_t len;
     uint8_t dpu_id,rank_id;
-   
+ 
+    //Scatter Gather call 
+
+
+
 
    /* 
     DPU_FOREACH(*dpu_set, dpu, dpu_id){
@@ -210,36 +211,62 @@ struct dpu_set_t* populate_mram_scatter_gather(uint32_t table_id, uint64_t nr_ro
             // DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[((dpu_id-table_id*NR_COLS)*nr_rows)])));
             DPU_ASSERT(dpu_prepare_xfer(dpu, table_data));
         }
-    }*/
+    }
+    DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
+*/	
 
-    //Write a utility function that returns for each DPU 
-
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  //  DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
-
-
-    // for (int i = 0; i < NR_COLS; i++)
-    //     free(buffer_data[i]);
-    //TIME_NOW(&end);
-
-    //if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
 
     return dpu_set;
 }
+
+
+typedef struct sg_xfer_context {
+  size_t **metadata;          /* [in] array of block lengths */
+  uint8_t ***block_addresses; /* [in] indexes to store the next block */
+} sg_xfer_context;
+
+bool get_block(struct sg_block_info *out, uint32_t dpu_index,
+               uint32_t block_index, void *args) {
+  if (block_index >= NB_BLOCKS) {
+    return false;
+  }
+
+  /* Unpack the arguments */
+  sg_xfer_context *sc_args = (sg_xfer_context *)args;
+  size_t **metadata = sc_args->metadata;
+  size_t length = metadata[dpu_index][block_index];
+  uint8_t ***block_addresses = sc_args->block_addresses;
+
+  /* Set the output block */
+  out->length = length * sizeof(int);
+  out->addr = block_addresses[dpu_index][block_index];
+
+  return true;
+}
+
+/* Compute the addresses of inbound blocks in the output buffer. */
+void compute_block_addresses(
+    size_t **metadata,          /* [in] array of block lengths */
+    uint8_t ***block_addresses, /* [out] indexes to store the blocks */
+    int *out_buffer,            /* [in] output buffer */
+    size_t lower_length         /* [in] length of the lower partition */
+) {
+  block_addresses[0][0] = (uint8_t *)out_buffer;
+  block_addresses[0][1] = (uint8_t *)&out_buffer[lower_length];
+
+  for (int i = 1; i < NB_DPUS; i++) {
+    for (int j = 0; j < NB_BLOCKS; j++) {
+      size_t previous_length = metadata[i - 1][j] * sizeof(*out_buffer);
+      block_addresses[i][j] = block_addresses[i - 1][j] + previous_length;
+    }
+  }
+}
+
+
+
+
+
+
 
 
 dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg){
@@ -466,215 +493,3 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     }
     return 0;
 }
-
-
-
-
-
-int32_t* lookup_scatter_gather (uint32_t** indices, uint32_t** offsets, float** final_results, void *dpu_set_ptr_untyped
-                //,dpu_runtime_group *runtime_group
-                ){
-    // // Check env
-    // printf("C test: Check envs: NR_COLS=%d, NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
-    //int latency_record = latency_print;
-    int latency_record = 0;
- 
- 
- 
-    long ind_copy_lat, query_copy_lat, dpu_launch_lat, results_copy_lat, callback_prep_lat, wait_sync_lat;
-
-
-    // PIM: Profiling
-    struct timespec start, end;
-
-    //printf("starting lookup\n");
-    struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
-    // struct timespec start, end;
-    int dpu_id,table_id;
-    struct dpu_set_t dpu_rank,dpu, set;
-    struct query_len lengths[NR_TABLES];
-
-    if (latency_record == 1) {
-        TIME_NOW(&start);
-    }
-
-    //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
-    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
-        DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
-    }
-
-    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
-        INDICES_LEN*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    //printf("copied indices\n");
-
-    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
-        DPU_ASSERT(dpu_prepare_xfer(dpu,offsets[(int)(dpu_id/NR_COLS)]));
-    }
-    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
-        MAX_NR_BATCHES*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    //printf("copied offsets\n");
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        ind_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-
-        TIME_NOW(&start);
-    }
-
-    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
-        table_id=(int)(dpu_id/NR_COLS);
-        lengths[table_id].indices_len=INDICES_LEN;
-        lengths[table_id].nr_batches=MAX_NR_BATCHES;
-        DPU_ASSERT(dpu_prepare_xfer(dpu,&lengths[table_id]));
-    }
-    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_lengths",0,
-        sizeof(struct query_len),DPU_XFER_DEFAULT));
-    //printf("query copied\n");
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        query_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-
-        TIME_NOW(&start);
-    }
-
-    DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_SYNCHRONOUS));
-    //printf("launch done\n");
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        dpu_launch_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-    }
-
-    int32_t ***tmp_results=(int32_t***)malloc(NR_TABLES*sizeof(int32_t**));
-    //printf("wanna copy\n");
-
-    if (latency_record == 1) {
-        TIME_NOW(&start);
-    }
-
-    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
-        if(dpu_id%NR_COLS==0){
-            table_id=dpu_id/NR_COLS;
-            tmp_results[table_id]=(int32_t**)malloc(NR_COLS*sizeof(int32_t*));
-        }
-        tmp_results[table_id][dpu_id%NR_COLS]=(int32_t*)malloc(MAX_NR_BATCHES*sizeof(int32_t));
-        DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[table_id][dpu_id%NR_COLS][0]));
-    }
-    //printf("copying back\n");
-    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results", 0, ALIGN(sizeof(int32_t)*MAX_NR_BATCHES,8), DPU_XFER_DEFAULT));
-    //printf("Copies done\n");
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        results_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-        
-        TIME_NOW(&start);
-    }
-
-    struct callback_input *callback_data=(struct callback_input*)malloc(sizeof(struct callback_input));
-    callback_data->final_results=final_results;
-    callback_data->nr_batches=MAX_NR_BATCHES;
-    callback_data->tmp_results=tmp_results;
-    //printf("callback input allocated\n");
-    
-    DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)callback_data,DPU_CALLBACK_ASYNC));
-    //printf("callback done4\n");
-    // DPU_FOREACH(*dpu_set_ptr, dpu) {
-    //     DPU_ASSERT(dpu_log_read(dpu, stdout));
-    // }
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        callback_prep_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-        
-        TIME_NOW(&start);
-    }
-
-    dpu_sync(*dpu_set_ptr);
-
-    if (latency_record == 1) {
-        TIME_NOW(&end);
-        wait_sync_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-    }
-
-    // long dpu_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-    // printf("DPU Lat: %ldμs\n", dpu_lat);
-    uint32_t instructions;
-    uint32_t clks_p_sec;
-    DPU_FOREACH(set, dpu) {
-        DPU_ASSERT(
-            dpu_copy_from(dpu, "instructions", 0, &instructions, sizeof(uint32_t)));
-    }
-    DPU_FOREACH(set, dpu) {
-        DPU_ASSERT(
-            dpu_copy_from(dpu, "CLOCKS_PER_SEC", 0, &clks_p_sec, sizeof(uint32_t)));
-    }
-    // printf("DPU Freq: %uHz\n", clks_p_sec);
-    // printf("DPU instructions: %u\n", instructions);
-    // printf("DPU IPC: %f\n", (float) instructions / (float) (clks_p_sec * dpu_lat * 1.0e-6));
-
-    //printf("sync done\n");
-    /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-        if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
-            TIME_NOW(&end);
-            f//printf(stderr,
-                "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                dpu_id, runtime_group[table_id].in_use, table_id, runtime_group[table_id].length);
-            exit(1);
-        }
-        copy_interval(
-            &runtime_group->intervals[runtime_group[table_id].in_use], &start, &end);
-            runtime_group[table_id].in_use++;
-    } */
-    /* free(callback_data);
-    for(int i=0; i<NR_TABLES; i++){
-        for(int j=0; j<NR_COLS; j++){
-            free(tmp_results[i][j]);
-        }
-        free(tmp_results[i]);
-    }
-    free(tmp_results); */
-
-    if (latency_record == 1) {
-        printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
-        printf("C: Query copying latency: %ldμs\n", query_copy_lat);
-        printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
-        printf("C: Results copy latency: %ldμs\n", results_copy_lat);
-        printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
-        printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
-    }
-    return 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
