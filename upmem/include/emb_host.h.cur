@@ -23,7 +23,7 @@
 #    define DPU_BINARY "/home/prithvi/prithvi/phd/eth/safari/research/ubc/scatter_gather/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
-#define NB_BLOCKS 1  //No. of blocks to transfer
+
 
 
 // PIM: Temp fix for bad env var passing... dont know why it stopped working
@@ -185,7 +185,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 	}
 
 
-	struct dpu_set_t* populate_mram_sg(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t **emb_tables, dpu_runtime_totals *runtime){
+	struct dpu_set_t* populate_mram_sg(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t *table_data, dpu_runtime_totals *runtime){
 
 		struct timespec start, end;
 		struct dpu_set_t dpu;
@@ -200,6 +200,15 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		uint32_t len;
 		uint8_t dpu_id,rank_id;
 
+		/* Retrieve metadata and compute length of the left partition. */
+		size_t **metadata = get_metadata(set, NB_DPUS);
+		size_t lower_length = get_left_length(metadata);
+
+		/* Compute where to store the incoming blocks. */
+		uint8_t ***block_addresses =
+			bidimensional_malloc(NB_DPUS, NB_BLOCKS, sizeof(uint8_t *));
+		compute_block_addresses(metadata, block_addresses, buffer, lower_length);
+
 
 
 
@@ -213,43 +222,27 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		DPU_ASSERT(dpu_push_sg_xfer(set, DPU_XFER_TO_DPU, "emb_data", 0,
 					nr_rows*sizeof(int_32),
 					&get_block_info, DPU_SG_XFER_DEFAULT));
-	
 
 		return dpu_set;
 	}
 
 
 	typedef struct sg_xfer_context {
-//		size_t **metadata;          /* [in] array of block lengths */
-//		uint8_t ***block_addresses; /* [in] indexes to store the next block */
-		uint32_t table_id; 
-		uint64_t rows; 	
-		int32_t **emb_tables; 		
-	
+		size_t **metadata;          /* [in] array of block lengths */
+		uint8_t ***block_addresses; /* [in] indexes to store the next block */
 	} sg_xfer_context;
 
 	bool get_block(struct sg_block_info *out, uint32_t dpu_index,
 			uint32_t block_index, void *args) {
-	
 		if (block_index >= NB_BLOCKS) {
 			return false;
 		}
 
 		/* Unpack the arguments */
 		sg_xfer_context *sc_args = (sg_xfer_context *)args;
-	
-		/*
 		size_t **metadata = sc_args->metadata;
 		size_t length = metadata[dpu_index][block_index];
 		uint8_t ***block_addresses = sc_args->block_addresses;
-		*/
-
-		int32_t **emb_tables  = sc_args->emb_tables;
-	        	
-
-
-
-
 
 		/* Set the output block */
 		out->length = length * sizeof(int);
@@ -268,14 +261,12 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		block_addresses[0][0] = (uint8_t *)out_buffer;
 		block_addresses[0][1] = (uint8_t *)&out_buffer[lower_length];
 
-		/*
 		for (int i = 1; i < NB_DPUS; i++) {
 			for (int j = 0; j < NB_BLOCKS; j++) {
 				size_t previous_length = metadata[i - 1][j] * sizeof(*out_buffer);
 				block_addresses[i][j] = block_addresses[i - 1][j] + previous_length;
 			}
 		}
-		*/
 	}
 
 
