@@ -210,8 +210,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 	        	
 
 		out->length = nr_rows*sizeof(int32_t) ;  
-		//out->addr = emb_tables[table_id*NR_COLS*NR_TABLES + dpu_index*nr_rows ];	
-		out->addr = emb_tables[table_id][dpu_index*nr_rows ];	
+		out->addr = (uint8_t *) &emb_tables[table_id][(dpu_index % NR_COLS) *nr_rows ];	
 
 
 		/* Set the output block */
@@ -484,6 +483,41 @@ This function updates ans with the elements of the rows that we have lookedup
 		return 0;
 	}
 
+	typedef struct sg_xfer_indices_context {
+                uint32_t **indices;
+
+        } sg_xfer_indices_context;
+
+
+
+        bool get_indices_block(struct sg_block_info *out, uint32_t dpu_index,
+                        uint32_t block_index, void *args) {
+
+                if (block_index >= NB_BLOCKS) {
+                        return false;
+                }
+
+                /* Unpack the arguments */
+                sg_xfer_indices_context *sc_args = (sg_xfer_indices_context *)args;
+
+
+                uint32_t **indices  = sc_args->indices;
+
+
+                out->length = INDICES_LEN*sizeof(int32_t) ;
+		out->addr = (uint8_t *)  &indices[(int)(dpu_index/NR_COLS)] ; 
+
+              //  out->addr = (uint8_t *) &emb_tables[table_id][(dpu_index % NR_COLS) *nr_rows ];
+
+
+                /* Set the output block */
+//              out->length = length * sizeof(int);
+//              out->addr = block_addresses[dpu_index][block_index];
+
+                return true;
+        }
+
+
 
 
 	int32_t* lookup_sg(uint32_t** indices, uint32_t** offsets, float** final_results, void *dpu_set_ptr_untyped
@@ -514,12 +548,51 @@ This function updates ans with the elements of the rows that we have lookedup
 		}
 
 		//if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
+
+
+		//Copying indices. 	
+
+		/*
 		DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
 			DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
 		}
 
 		DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
 						INDICES_LEN*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
+	
+		*/ 
+
+
+		sg_xfer_indices_context sc_args = {
+                                           .indices = indices,
+                                };
+
+                get_block_t get_block_info = {.f = &get_indices_block, .args = &sc_args};
+
+                DPU_ASSERT(dpu_push_sg_xfer(*dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
+                                        INDICES_LEN*sizeof(uint32_t),
+                                        &get_block_info, DPU_SG_XFER_DEFAULT));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
+	
 		//printf("copied indices\n");
 
 		DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
@@ -635,4 +708,4 @@ This function updates ans with the elements of the rows that we have lookedup
 			printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
 		}
 		return 0;
-	}
+		}
